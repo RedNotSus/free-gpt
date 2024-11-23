@@ -45,36 +45,72 @@ const createChatElement = (content, className) => {
 
 const getChatResponse = async (incomingChatDiv) => {
   const pElement = document.createElement("p");
-  let html;
+  incomingChatDiv.querySelector(".chat-details").appendChild(pElement);
+  chatContainer.scrollTo(0, chatContainer.scrollHeight);
+
   try {
-    const data = await fetch("/api/chat", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ message: userText, userId }),
-    });
-    const response = await data.json();
-    html = response.response.replace(
-      /<pre><code class="language-(.*?)">([\s\S]*?)<\/code><\/pre>/g,
-      (match, lang, code) => {
-        const language = Prism.languages[lang] ? lang : "plaintext";
-        const highlightedCode = Prism.highlight(
-          code,
-          Prism.languages[language],
-          language
-        );
-        return `<pre><code class="language-${language}">${highlightedCode}</code></pre>`;
+    const response = await fetch(
+      "https://api.groq.com/openai/v1/chat/completions",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer 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`,
+        },
+        body: JSON.stringify({
+          messages: [
+            {
+              role: "user",
+              content: userText,
+            },
+          ],
+          model: "llama-3.2-90b-text-preview",
+          stream: true,
+        }),
       }
     );
-    html = marked.parse(response.response);
-    pElement.appendChild(document.createRange().createContextualFragment(html));
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let done = false;
+    let buffer = "";
+
+    while (!done) {
+      const { value, done: doneReading } = await reader.read();
+      done = doneReading;
+      buffer += decoder.decode(value, { stream: true });
+
+      let lines = buffer.split("\n");
+      buffer = lines.pop();
+
+      for (let line of lines) {
+        if (line.trim() === "") continue;
+        if (line.startsWith("data: ")) {
+          line = line.replace("data: ", "");
+          if (line === "[DONE]") {
+            done = true;
+            break;
+          }
+          try {
+            const json = JSON.parse(line);
+            const content = json.choices[0]?.delta?.content || "";
+            pElement.innerHTML += content;
+            chatContainer.scrollTo(0, chatContainer.scrollHeight);
+          } catch (e) {
+            console.error("Error parsing JSON:", e);
+          }
+        }
+      }
+    }
+
+    isProcessing = false;
+    sendButton.classList.replace("fa-stop", "fa-paper-plane");
   } catch (error) {
-    if (data.response.status === 429) {
+    if (error.response?.status === 429) {
       pElement.classList.add("error");
       pElement.textContent =
         "Too many requests have been sent in 1 minute, please try again later.";
-    } else if (error.response.status === 503) {
+    } else if (error.response?.status === 503) {
       pElement.classList.add("error");
       pElement.textContent = "AI is currently overloaded, please try again.";
     } else {
@@ -83,13 +119,11 @@ const getChatResponse = async (incomingChatDiv) => {
         "Oops! Something went wrong while retrieving the response. Please try again.";
       console.log(error);
     }
+    isProcessing = false;
+    sendButton.classList.replace("fa-stop", "fa-paper-plane");
   }
 
-  incomingChatDiv.querySelector(".typing-animation").remove();
-  incomingChatDiv.querySelector(".chat-details").appendChild(pElement);
   chatContainer.scrollTo(0, chatContainer.scrollHeight);
-  isProcessing = false;
-  sendButton.classList.replace("fa-stop", "fa-paper-plane");
 };
 
 const copyResponse = (copyBtn) => {
@@ -105,12 +139,7 @@ const copyResponse = (copyBtn) => {
 const showTypingAnimation = () => {
   const html = `<div class="chat-content">
                     <div class="chat-details">
-                        <img src="/img/gmsai.jpg" class='avatar' alt="chatbot-img">
-                        <div class="typing-animation">
-                            <div class="typing-dot" style="--delay: 0.2s"></div>
-                            <div class="typing-dot" style="--delay: 0.3s"></div>
-                            <div class="typing-dot" style="--delay: 0.4s"></div>
-                        </div>
+                        <img src="/assets/ai.svg" class='avatar' alt="chatbot-img">
                     </div>
                     <span onclick="copyResponse(this)" class="material-symbols-rounded">
                         <i class="fa-regular fa-copy"></i>
@@ -135,7 +164,7 @@ const handleOutgoingChat = () => {
 
   const html = `<div class="chat-content">
                     <div class="chat-details">
-                        <img src="img/user.webp" class='avatar' alt="user-img">
+                        <img src="assets/user.webp" class='avatar' alt="user-img">
                         <p>${userText}</p>
                     </div>
                 </div>`;
