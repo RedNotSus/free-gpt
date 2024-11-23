@@ -46,6 +46,20 @@ const examplePrompts = [
 ];
 let userText = null;
 let isProcessing = false;
+
+const initializeMarked = () => {
+  if (typeof marked !== "undefined") {
+    marked.use({
+      breaks: true,
+      gfm: true,
+      headerIds: false,
+      mangle: false,
+    });
+  }
+};
+
+document.addEventListener("DOMContentLoaded", initializeMarked);
+
 const shuffleArray = (array) => {
   for (let i = array.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
@@ -84,10 +98,24 @@ const createChatElement = (content, className) => {
   return chatDiv;
 };
 
+const formatMarkdown = (text) => {
+  try {
+    if (typeof marked !== "undefined") {
+      return marked.parse(text);
+    }
+    return text;
+  } catch (error) {
+    console.error("Error parsing markdown:", error);
+    return text;
+  }
+};
+
 const getChatResponse = async (incomingChatDiv) => {
   const pElement = document.createElement("p");
   incomingChatDiv.querySelector(".chat-details").appendChild(pElement);
   chatContainer.scrollTo(0, chatContainer.scrollHeight);
+
+  let accumulatedText = "";
 
   try {
     const response = await fetch(
@@ -135,7 +163,16 @@ const getChatResponse = async (incomingChatDiv) => {
           try {
             const json = JSON.parse(line);
             const content = json.choices[0]?.delta?.content || "";
-            pElement.innerHTML += content;
+            accumulatedText += content;
+
+            pElement.innerHTML = formatMarkdown(accumulatedText);
+
+            if (typeof Prism !== "undefined") {
+              pElement.querySelectorAll("pre code").forEach((block) => {
+                Prism.highlightElement(block);
+              });
+            }
+
             chatContainer.scrollTo(0, chatContainer.scrollHeight);
           } catch (e) {
             console.error("Error parsing JSON:", e);
@@ -257,4 +294,5 @@ document.addEventListener("keydown", (e) => {
 
   chatInput.focus();
 });
+
 loadDataFromLocalstorage();
