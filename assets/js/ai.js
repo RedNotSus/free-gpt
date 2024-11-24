@@ -5,6 +5,8 @@ const deleteButton = document.querySelector("#delete-btn");
 
 const userId = Date.now().toString();
 
+let messageHistory = [];
+
 const examplePrompts = [
   "Breakup text from a toaster.",
   "Plan a road trip.",
@@ -60,6 +62,13 @@ const initializeMarked = () => {
 
 document.addEventListener("DOMContentLoaded", initializeMarked);
 
+const addToMessageHistory = (role, content) => {
+  messageHistory.push({ role, content });
+  if (messageHistory.length > 10) {
+    messageHistory = messageHistory.slice(messageHistory.length - 10);
+  }
+};
+
 const shuffleArray = (array) => {
   for (let i = array.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
@@ -68,6 +77,7 @@ const shuffleArray = (array) => {
 };
 
 const loadDataFromLocalstorage = () => {
+  messageHistory = [];
   shuffleArray(examplePrompts);
   const defaultText = `<div class="default-text">
                             <h1>Free-GPT</h1>
@@ -109,7 +119,6 @@ const formatMarkdown = (text) => {
     return text;
   }
 };
-
 const getChatResponse = async (incomingChatDiv) => {
   const pElement = document.createElement("p");
   incomingChatDiv.querySelector(".chat-details").appendChild(pElement);
@@ -118,6 +127,18 @@ const getChatResponse = async (incomingChatDiv) => {
   let accumulatedText = "";
 
   try {
+    const systemMessage = {
+      role: "system",
+      content:
+        "You are a helpful AI assistant. Maintain a natural, conversational tone and remember context from earlier in our discussion. If you reference something from earlier in the conversation, be specific about what you're referring to.",
+    };
+
+    const messages = [
+      systemMessage,
+      ...messageHistory,
+      { role: "user", content: userText },
+    ];
+
     const response = await fetch(
       "https://api.groq.com/openai/v1/chat/completions",
       {
@@ -127,12 +148,7 @@ const getChatResponse = async (incomingChatDiv) => {
           Authorization: `Bearer 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`,
         },
         body: JSON.stringify({
-          messages: [
-            {
-              role: "user",
-              content: userText,
-            },
-          ],
+          messages: messages,
           model: "llama-3.2-90b-text-preview",
           stream: true,
         }),
@@ -180,6 +196,8 @@ const getChatResponse = async (incomingChatDiv) => {
         }
       }
     }
+
+    addToMessageHistory("assistant", accumulatedText);
 
     isProcessing = false;
     sendButton.classList.replace("fa-stop", "fa-paper-plane");
@@ -236,6 +254,8 @@ const handleOutgoingChat = () => {
 
   userText = chatInput.value.trim();
   if (!userText) return;
+
+  addToMessageHistory("user", userText);
 
   chatInput.value = "";
   chatInput.style.height = `${initialInputHeight}px`;
