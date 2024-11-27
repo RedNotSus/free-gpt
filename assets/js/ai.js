@@ -149,7 +149,7 @@ const getChatResponse = async (incomingChatDiv) => {
         },
         body: JSON.stringify({
           messages: messages,
-          model: "llama-3.2-90b-text-preview",
+          model: "llama-3.1-70b-versatile",
           stream: true,
         }),
       }
